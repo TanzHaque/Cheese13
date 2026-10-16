@@ -141,12 +141,13 @@ function Test-RdpLogin {
 # ---------------------------------------------------------------- Jenkins (what the scoring engine does)
 function Send-Http {
     # One HTTP request that NEVER follows redirects (we want to read the redirect). Same behaviour on PS 5.1 and 7.
-    # Returns Code (0 = no answer), Location (redirect target) and Error.
-    param([string]$Url, [string]$Method = 'GET', [string]$Body = '', [int]$TimeoutMs = 10000)
+    # Returns Code (0 = no answer), Location (redirect target), Body and Error.
+    param([string]$Url, [string]$Method = 'GET', [string]$Body = '', [int]$TimeoutMs = 10000, [System.Net.CookieContainer]$Cookies = $null)
     $req = [System.Net.WebRequest]::Create($Url) -as [System.Net.HttpWebRequest]
     $req.Method = $Method
     $req.AllowAutoRedirect = $false
     $req.Timeout = $TimeoutMs
+    if ($Cookies) { $req.CookieContainer = $Cookies }
     try {
         if ($Method -eq 'POST') {
             $bytes = [Text.Encoding]::UTF8.GetBytes($Body)
@@ -157,12 +158,21 @@ function Send-Http {
         $resp = $req.GetResponse()
     } catch [System.Net.WebException] {
         $resp = $_.Exception.Response            # 4xx / 5xx still give us a response to read
-        if (-not $resp) { return [pscustomobject]@{ Code = 0; Location = ''; Error = $_.Exception.Message } }
-    } catch { return [pscustomobject]@{ Code = 0; Location = ''; Error = $_.Exception.Message } }
+        if (-not $resp) { return [pscustomobject]@{ Code = 0; Location = ''; Body = ''; Error = $_.Exception.Message } }
+    } catch { return [pscustomobject]@{ Code = 0; Location = ''; Body = ''; Error = $_.Exception.Message } }
     $code = [int]$resp.StatusCode
     $loc  = [string]$resp.Headers['Location']
+    $respBody = ''
+    try {
+        $stream = $resp.GetResponseStream()
+        if ($stream) {
+            $reader = New-Object System.IO.StreamReader($stream)
+            $respBody = $reader.ReadToEnd()
+            $reader.Close()
+        }
+    } catch { }
     $resp.Close()
-    [pscustomobject]@{ Code = $code; Location = $loc; Error = '' }
+    [pscustomobject]@{ Code = $code; Location = $loc; Body = $respBody; Error = '' }
 }
 
 function Test-JenkinsLogin {
@@ -170,11 +180,16 @@ function Test-JenkinsLogin {
     # Back to the page we asked for = good login.  To /loginError = bad login.
     param([string]$HostName, [int]$Port = 8080, [string]$User, [string]$Password)
     $base = "http://${HostName}:$Port"
-    $page = Send-Http "$base/login"
+    $cookies = New-Object System.Net.CookieContainer
+    $page = Send-Http "$base/login" -Cookies $cookies
     if ($page.Code -eq 0)   { return New-Result 'Jenkins login' 'FAIL' "no answer from $base ($($page.Error))" }
     if ($page.Code -ge 500) { return New-Result 'Jenkins login' 'FAIL' "GET /login gave HTTP $($page.Code) (is Jenkins still starting?)" }
+    $crumb = ''
+    if ($page.Body -match 'name="Jenkins-Crumb"\s+type="hidden"\s+value="([^"]+)"') { $crumb = $matches[1] }
+    elseif ($page.Body -match 'value="([^"]+)"\s+name="Jenkins-Crumb"') { $crumb = $matches[1] }
     $form = 'j_username=' + [uri]::EscapeDataString($User) + '&j_password=' + [uri]::EscapeDataString($Password) + '&from=%2F&Submit=Sign+in'
-    $r = Send-Http "$base/j_spring_security_check" -Method POST -Body $form
+    if ($crumb) { $form += '&Jenkins-Crumb=' + [uri]::EscapeDataString($crumb) }
+    $r = Send-Http "$base/j_spring_security_check" -Method POST -Body $form -Cookies $cookies
     if ($r.Code -eq 0) { return New-Result 'Jenkins login' 'FAIL' "login request failed: $($r.Error)" }
     if ($r.Code -in 301, 302, 303 -and $r.Location -notmatch 'loginError') { return New-Result 'Jenkins login' 'PASS' "$User logged in (redirected to $($r.Location))" }
     New-Result 'Jenkins login' 'FAIL' "login as $User refused (HTTP $($r.Code), redirect '$($r.Location)')"
