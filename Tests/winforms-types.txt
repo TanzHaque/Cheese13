@@ -1,0 +1,34 @@
+# The WinForms / Drawing types that lib\Gui.ps1 creates or calls. WinFormsApiDump.cs writes down their public members
+# (and, one level deep, the types those hand out) into winforms-api.txt. One full type name per line.
+System.Windows.Forms.Application
+System.Windows.Forms.Button
+System.Windows.Forms.CheckBox
+System.Windows.Forms.ColumnHeader
+System.Windows.Forms.ColumnStyle
+System.Windows.Forms.ComboBox
+System.Windows.Forms.Cursors
+System.Windows.Forms.DialogResult
+System.Windows.Forms.FlowLayoutPanel
+System.Windows.Forms.Form
+System.Windows.Forms.FormClosingEventArgs
+System.Windows.Forms.Label
+System.Windows.Forms.ListView
+System.Windows.Forms.ListViewItem
+System.Windows.Forms.MessageBox
+System.Windows.Forms.MessageBoxButtons
+System.Windows.Forms.MessageBoxDefaultButton
+System.Windows.Forms.MessageBoxIcon
+System.Windows.Forms.Padding
+System.Windows.Forms.RowStyle
+System.Windows.Forms.Screen
+System.Windows.Forms.StatusStrip
+System.Windows.Forms.TableLayoutPanel
+System.Windows.Forms.TextBox
+System.Windows.Forms.Timer
+System.Windows.Forms.ToolStripStatusLabel
+System.Windows.Forms.ToolTip
+System.Drawing.Color
+System.Drawing.Font
+System.Drawing.FontStyle
+System.Drawing.Size
+System.Drawing.SystemColors
